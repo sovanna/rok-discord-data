@@ -4,6 +4,7 @@ import logging
 import logging.handlers
 import os
 from dotenv import load_dotenv
+from quickchart import QuickChart
 from redis import asyncio as aioredis
 from redis import RedisError
 from typing import Optional
@@ -39,10 +40,14 @@ GOV_KEYS = ["ID", "NAME", "POWER", "KVK RANK", "KVK KILLS T4", "KVK KILLS T5",
             "KVK KILLS T4/T5", "KVK DEADS", "EXPECTED KILLS", "EXPECTED DEADS", "TOTAL SCORE"]
 GOAL_KEYS = {
     "kill": "EXPECTED KILLS",
+    "t4": "KVK KILLS T4",
+    "t5": "KVK KILLS T5",
     "dead": "EXPECTED DEADS",
 }
 GOV_GOAL_KEYS = {
     "kill": "KVK KILLS T4/T5",
+    "t4": "KVK KILLS T4",
+    "t5": "KVK KILLS T5",
     "dead": "KVK DEADS"
 }
 
@@ -50,6 +55,38 @@ intents = discord.Intents.default()
 intents.message_content = True
 
 client = discord.Client(intents=intents)
+
+
+def get_chart_url(t4=0, t5=0, dead=0, progress=0):
+    qc = QuickChart()
+    qc.width = 500
+    qc.height = 300
+    qc.version = '2.9.4'
+    qc.config = """{
+        type: 'gauge',
+        data: {
+            datasets: [
+            {
+                value: %i,
+                data: [50, 100, 150, 200],
+                backgroundColor: ['#D64545', '#4098D7', '#3EBD93', 'black'],
+                borderWidth: 2,
+            },
+            ],
+        },
+        options: {
+            valueLabel: {
+            fontSize: 24,
+            backgroundColor: 'transparent',
+            color: '#000',
+            formatter: function (value, context) {
+                return %i + ' %%';
+            },
+            bottomMarginPercentage: 10,
+            },
+        },
+        }""" % (progress if progress <= 200 else 200, progress)
+    return qc.get_url()
 
 
 async def get_id_from_store(authorid: str, gov_id: Optional[int] = None) -> Optional[int]:
@@ -86,6 +123,10 @@ async def get_stat_governor_id(gov_id: int, channel):
         v = governor.get(k, None)
         description += f"**{k.lower().title()}**: {v or '---'}\n"
 
+    embed = discord.Embed(color=0x00ff00)
+    embed.title = title
+    embed.description = description
+
     gov_goal_set = True
     for _, v in GOAL_KEYS.items():
         if v not in governor:
@@ -94,30 +135,47 @@ async def get_stat_governor_id(gov_id: int, channel):
         if v not in governor:
             gov_goal_set = False
 
-    gov_progression = None
     if gov_goal_set is True:
+        gov_progression = None
+
         try:
             gov_goal_kill = int(
                 governor[GOAL_KEYS.get("kill")].replace(",", ""))
             gov_goal_dead = int(
                 governor[GOAL_KEYS.get("dead")].replace(",", ""))
             goal_to_reached = gov_goal_kill + gov_goal_dead
+
             gov_kill = int(
                 governor[GOV_GOAL_KEYS.get("kill")].replace(",", ""))
+            gov_kill_t4 = int(
+                governor[GOV_GOAL_KEYS.get("t4")].replace(",", ""))
+            gov_kill_t5 = int(
+                governor[GOV_GOAL_KEYS.get("t5")].replace(",", ""))
             gov_dead = int(
                 governor[GOV_GOAL_KEYS.get("dead")].replace(",", ""))
             gov_reached = gov_kill + gov_dead
+
             gov_progression = round(gov_reached * 100 / goal_to_reached)
+            gov_progression_t4 = round(gov_kill_t4 * 100 / gov_goal_kill)
+            gov_progression_t5 = round(gov_kill_t5 * 100 / gov_goal_kill)
+            gov_progression_dead = round(gov_dead * 100 / gov_goal_dead)
         except Exception as e:
             print(e)
-        goal_to_reached = governor[GOAL_KEYS.get("kill")]
 
-    embed = discord.Embed(color=0x00ff00)
-    embed.title = title
-    embed.description = description
-    if gov_progression is not None:
-        embed.add_field(name="Total Kills Goal Progression",
-                        value=f"{gov_progression}%")
+        if gov_progression is not None:
+            embed.add_field(name="Kill/Dead Goal Progression",
+                            value=f"{gov_progression}%")
+            chart_value = gov_progression
+            chart_color = "green"
+            chart_url = get_chart_url(
+                t4=gov_progression_t4,
+                t5=gov_progression_t5,
+                dead=gov_progression_dead,
+                progress=gov_progression
+            )
+
+            embed.set_image(url=chart_url)
+
     await channel.send(embed=embed)
 
 
