@@ -165,15 +165,12 @@ async def get_stat_governor_id(gov_id: int, channel):
         if gov_progression is not None:
             embed.add_field(name="Kill/Dead Goal Progression",
                             value=f"{gov_progression}%")
-            chart_value = gov_progression
-            chart_color = "green"
             chart_url = get_chart_url(
                 t4=gov_progression_t4,
                 t5=gov_progression_t5,
                 dead=gov_progression_dead,
                 progress=gov_progression
             )
-
             embed.set_image(url=chart_url)
 
     await channel.send(embed=embed)
