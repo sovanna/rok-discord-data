@@ -50,5 +50,33 @@ def reset():
         print(f"COMMAND ID {id}: {resp.status_code}")
 
 
+@app.command()
+def add_commands():
+    cmds = [
+        {
+            "name": "stat",
+            "description": "Display the lastest registered stats for a governor",
+            "type": 1,
+            "options": [
+                {
+                    "name": "governor_id",
+                    "description": "The governor ID",
+                    "required": True,
+                    "type": 4,  # require a INTEGER INPUT (ID)
+                },
+            ],
+        },
+    ]
+    for cmd in cmds:
+        # This create or update the slash commands
+        response = requests.post(URL_BASE, headers=HEADERS_BASE, json=cmd)
+        if response.status_code >= 400:
+            print(response.content)
+            raise Exception("Request Error!")
+        else:
+            print("command updated")
+        time.sleep(2)
+
+
 if __name__ == "__main__":
     app()

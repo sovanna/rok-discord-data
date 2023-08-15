@@ -3,6 +3,7 @@ import discord
 import logging
 import logging.handlers
 import os
+from discord.ext import commands
 from dotenv import load_dotenv
 from quickchart import QuickChart
 from redis import asyncio as aioredis
@@ -54,7 +55,7 @@ GOV_GOAL_KEYS = {
 intents = discord.Intents.default()
 intents.message_content = True
 
-client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents, help_command=None)
 
 
 def get_chart_url(t4=0, t5=0, dead=0, progress=0):
@@ -110,11 +111,17 @@ async def get_id_from_store(authorid: str, gov_id: Optional[int] = None) -> Opti
     return memory_gov_id
 
 
-async def get_stat_governor_id(gov_id: int, channel):
+async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = None, channel=None):
     kvk = KvK()
     governor = kvk.get_governor_last_data(gov_id)
     if governor is None:
-        return await channel.send(content=f"Governor {gov_id} not found in database.")
+        content = f"Governor {gov_id} not found in database."
+        if interaction:
+            return await interaction.response.send_message(content)
+        elif channel:
+            return await channel.send(content=content)
+        else:
+            return
 
     title = f"Registration date: {kvk.get_last_registered_date()} (Month/Date/Year)\n"
 
@@ -173,10 +180,47 @@ async def get_stat_governor_id(gov_id: int, channel):
             )
             embed.set_image(url=chart_url)
 
-    await channel.send(embed=embed)
+    if interaction:
+        await interaction.response.send_message(embed=embed)
+    elif channel:
+        await channel.send(embed=embed)
 
 
-@client.event
+@bot.hybrid_command(name="stat")
+async def stat(ctx):
+    interaction: discord.Interaction = ctx.interaction
+    data = interaction.data
+    # for the stats command, with only have one option (PLAYER ID)
+    options = data["options"]
+    option = options[0]
+    value = option["value"]
+    gov_id = None
+
+    try:
+        gov_id = int(value)
+    except Exception as e:
+        # maybe not a valid player ID
+        print(e)
+
+    if gov_id is None:
+        await interaction.response.send_message("Sorry! you entered a non valid GOVERNOR ID", ephemeral=True)
+    else:
+        await get_stat_governor_id(gov_id=gov_id, interaction=interaction)
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    interaction: discord.Integration = ctx.interaction
+
+    if isinstance(error, commands.MissingRole):
+        await interaction.response.send_message(content="You don't have appropriate Role", ephemeral=True)
+    elif isinstance(error, commands.CommandError):
+        await interaction.response.send_message(content=f"Invalid command {str(error)}", ephemeral=True)
+    else:
+        await interaction.response.send_message(content="An error occurred", ephemeral=True)
+
+
+@bot.event
 async def on_ready():
     try:
         async with store.client() as conn:
@@ -184,18 +228,14 @@ async def on_ready():
             print(f"Redis ping: {'pong' if pong else '---'}")
     except RedisError as e:
         print(e)
-    print(f'We have logged in as {client.user}')
 
 
-@client.event
+@bot.event
 async def on_message(message):
     author = message.author
     author_id = author.id
     content = message.content
     channel = message.channel
-
-    if author == client.user:
-        return
 
     if not content or content.strip() == "":
         return
@@ -229,7 +269,7 @@ async def on_message(message):
 
 
 async def main():
-    await client.start(TOKEN, reconnect=True)
+    await bot.start(TOKEN, reconnect=True)
 
 
 asyncio.run(main())
