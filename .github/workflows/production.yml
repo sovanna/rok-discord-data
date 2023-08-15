@@ -1,0 +1,55 @@
+name: Build Rok-Discord-Data 🎉
+
+on:
+  push:
+    branches: [ production ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+
+  build-bot:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/rok-discord-data
+
+      - name: Create .env file
+        run: |
+          touch .env
+          echo APPLICATION_ID=${{ secrets.DISCORD_APP_ID }} >> .env
+          echo PUBLIC_KEY=${{ secrets.DISCORD_PUBLIC_KEY }} >> .env
+          echo TOKEN=${{ secrets.DISCORD_TOKEN }} >> .env
+          echo GUILD_ID=${{ secrets.DISCORD_GUILD_ID }} >> .env
+          echo GOOGLE_SHEETS_API_KEY=${{ secrets.GOOGLE_SHEETS_API_KEY }} >> .env
+          echo GOOGLE_SPREADSHEET_ID=${{ secrets.GOOGLE_SPREADSHEET_ID }} >> .env
+          echo GOOGLE_SPREADSHEET_RANGE=base >> .env
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
