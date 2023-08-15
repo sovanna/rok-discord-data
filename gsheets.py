@@ -32,14 +32,14 @@ class KvK():
 
             # sort by TOTAL SCORE column to get the kingdom rank
             # last column shoul be the total score
-            data_sorted = sorted(self.data[1:], key=lambda gov: int(
+            self.data_sorted = sorted(self.data[1:], key=lambda gov: int(
                 gov[len(gov)-1].replace(",", "")), reverse=True)
 
-            total_governors = len(data_sorted)
+            total_governors = len(self.data_sorted)
 
             # dictionary of governors by ID (first column r[0] presumed from google sheets)
             self.governors = {r[0]: r + [f"{i+1}/{total_governors}"] for i,
-                              r in enumerate(data_sorted) if len(r) > 0}
+                              r in enumerate(self.data_sorted) if len(r) > 0}
 
     def get_last_registered_date(self) -> Optional[str]:
         if self.last_fields_headers is None:
@@ -58,6 +58,12 @@ class KvK():
         headers = ["ID", "NAME"] + self.last_fields_headers[1:] + ["KVK RANK"]
         governor = governor[0:2] + governor[self.last_idx_fields_date+1:]
         return dict(zip(headers, governor))
+
+    def get_top_governors(self, top=300):
+        if self.data_sorted and len(self.data_sorted) > 0:
+            nb_govs = len(self.data_sorted[0])
+            return list(map(lambda g: dict(id=g[0], name=g[1], score=int(g[nb_govs-1].replace(",", ""))), self.data_sorted[:top]))
+        return []
 
     def _get_from_google_sheets(self) -> []:
         try:
@@ -82,6 +88,7 @@ def main():
     print(kvk.last_fields_headers)
     print(kvk.get_last_registered_date())
     print(kvk.get_governor_last_data(132799325))
+    print(kvk.get_top_governors(top=10))
 
 
 if __name__ == '__main__':
