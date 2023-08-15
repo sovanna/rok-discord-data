@@ -66,6 +66,11 @@ def add_commands():
                 },
             ],
         },
+        {
+            "name": "top",
+            "description": "Display the TOP by total score",
+            "type": 1,
+        },
     ]
     for cmd in cmds:
         # This create or update the slash commands

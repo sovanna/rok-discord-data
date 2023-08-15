@@ -208,6 +208,37 @@ async def stat(ctx):
         await get_stat_governor_id(gov_id=gov_id, interaction=interaction)
 
 
+@bot.hybrid_command(name="top")
+async def top(ctx):
+    interaction: discord.Interaction = ctx.interaction
+    ranking = KvK().get_top_governors(top=100)
+    chunked_list = []
+    chunked_size = 20
+    for i in range(0, len(ranking), chunked_size):
+        chunked_list.append(ranking[i:i+chunked_size])
+
+    embed_list = []
+    for idx, chunked in enumerate(chunked_list):
+        l = len(chunked)
+        start = idx*chunked_size+1
+        end = idx*chunked_size+l
+
+        content = ""
+        for i, row in enumerate(chunked):
+            content += f"#{'0' if (start+i) < 10 else ''}{start+i} | {row['name']} | {row['score']} pts\n"
+        content += ""
+
+        embed = discord.Embed(color=0x0000ff)
+        embed.title = f"KVK - TOP by TOTAL SCORE"
+        embed.add_field(name=f"{start} -> {end}", value=content)
+        embed_list.append(embed)
+
+    try:
+        await interaction.response.send_message(embeds=embed_list)
+    except Exception as e:
+        await interaction.response.send_message(str(e))
+
+
 @bot.event
 async def on_command_error(ctx, error):
     interaction: discord.Integration = ctx.interaction
