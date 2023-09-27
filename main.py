@@ -20,19 +20,15 @@ load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
 REDIS_KEY_GOV_ID = "authorid:govid"
-GOV_KEYS = ["ID", "NAME", "POWER", "KVK RANK", "KVK KILLS T4", "KVK KILLS T5",
-            "KVK KILLS T4/T5", "KVK DEADS", "EXPECTED KILLS", "EXPECTED DEADS", "TOTAL SCORE"]
+GOV_KEYS = ["ID", "NAME", "POWER", "KVK RANK", "KVK GAME KILLS T4", "KVK GAME KILLS T5", "KVK GAME KILLS T4/T5", "KVK GAME DEADS", "KVK WAR KILLS T4", "KVK WAR KILLS T5",
+            "KVK WAR KILLS T4/T5", "KVK WAR DEADS", "EXPECTED KILLS", "EXPECTED DEADS", "TOTAL SCORE"]
 GOAL_KEYS = {
     "kill": "EXPECTED KILLS",
-    "t4": "KVK KILLS T4",
-    "t5": "KVK KILLS T5",
     "dead": "EXPECTED DEADS",
 }
 GOV_GOAL_KEYS = {
-    "kill": "KVK KILLS T4/T5",
-    "t4": "KVK KILLS T4",
-    "t5": "KVK KILLS T5",
-    "dead": "KVK DEADS"
+    "kill": "KVK WAR KILLS T4/T5",
+    "dead": "KVK WAR DEADS"
 }
 
 intents = discord.Intents.default()
@@ -137,18 +133,11 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
 
             gov_kill = int(
                 governor[GOV_GOAL_KEYS.get("kill")].replace(",", ""))
-            gov_kill_t4 = int(
-                governor[GOV_GOAL_KEYS.get("t4")].replace(",", ""))
-            gov_kill_t5 = int(
-                governor[GOV_GOAL_KEYS.get("t5")].replace(",", ""))
             gov_dead = int(
                 governor[GOV_GOAL_KEYS.get("dead")].replace(",", ""))
             gov_reached = gov_kill + gov_dead
 
             gov_progression = round(gov_reached * 100 / goal_to_reached)
-            gov_progression_t4 = round(gov_kill_t4 * 100 / gov_goal_kill)
-            gov_progression_t5 = round(gov_kill_t5 * 100 / gov_goal_kill)
-            gov_progression_dead = round(gov_dead * 100 / gov_goal_dead)
         except Exception as e:
             print(e)
 
@@ -156,9 +145,6 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
             embed.add_field(name="Kill/Dead Goal Progression",
                             value=f"{gov_progression}%")
             chart_url = get_chart_url(
-                t4=gov_progression_t4,
-                t5=gov_progression_t5,
-                dead=gov_progression_dead,
                 progress=gov_progression
             )
             embed.set_image(url=chart_url)
