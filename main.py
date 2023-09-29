@@ -20,15 +20,15 @@ load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
 REDIS_KEY_GOV_ID = "authorid:govid"
-GOV_KEYS = ["ID", "NAME", "POWER", "KVK RANK", "KVK GAME KILLS T4", "KVK GAME KILLS T5", "KVK GAME KILLS T4/T5", "KVK GAME DEADS", "KVK WAR KILLS T4", "KVK WAR KILLS T5",
-            "KVK WAR KILLS T4/T5", "KVK WAR DEADS", "EXPECTED KILLS", "EXPECTED DEADS", "TOTAL SCORE"]
+GOV_KEYS = ["ID", "NAME", "POWER", "KVK GAME KILLS T4", "KVK GAME KILLS T5", "KVK GAME KILLS T4/T5", "KVK GAME DEADS", "KVK WAR KILLS T4", "KVK WAR KILLS T5",
+            "KVK WAR KILLS T4/T5", "KVK WAR DEADS", "EXPECTED KILLS", "EXPECTED DEADS", "HONOR POINTS", "TOTAL SCORE", "KVK RANK"]
 GOAL_KEYS = {
     "kill": "EXPECTED KILLS",
     "dead": "EXPECTED DEADS",
 }
 GOV_GOAL_KEYS = {
-    "kill": "KVK WAR KILLS T4/T5",
-    "dead": "KVK WAR DEADS"
+    "kill": "KVK GAME KILLS T4/T5",
+    "dead": "KVK GAME DEADS"
 }
 
 intents = discord.Intents.default()
@@ -105,6 +105,8 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
     title = f"Registration date: {kvk.get_last_registered_date()} (Month/Date/Year)\n"
 
     description = ""
+    description += f"> Kvk War Kills and Deads are Official Battle\n"
+    description += f"> Total Score (Kvk Rank) use War Kills/Deads (can be used for MGE for example)\n\n"
     for k in GOV_KEYS:
         v = governor.get(k, None)
         description += f"**{k.lower().title()}**: {v or '---'}\n"
@@ -138,11 +140,16 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
             gov_reached = gov_kill + gov_dead
 
             gov_progression = round(gov_reached * 100 / goal_to_reached)
+            kill_met = gov_kill >= gov_goal_kill
+            dead_met = gov_dead >= gov_goal_dead
         except Exception as e:
             print(e)
 
         if gov_progression is not None:
-            embed.add_field(name="Kill/Dead Goal Progression",
+            embed.add_field(name="Expected Kills", value=f"{'✅' if kill_met else '🚫'}", inline=True)
+            embed.add_field(name="Expected Deads", value=f"{'✅' if dead_met else '🚫'}")
+            
+            embed.add_field(name="Global Kill/Dead Progression",
                             value=f"{gov_progression}%")
             chart_url = get_chart_url(
                 progress=gov_progression
@@ -194,11 +201,11 @@ async def top(ctx):
 
         content = ""
         for i, row in enumerate(chunked):
-            content += f"#{'0' if (start+i) < 10 else ''}{start+i} | {row['name']} | {row['score']} pts\n"
+            content += f"#{'0' if (start+i) < 10 else ''}{start+i} | {row['id']} | {row['name']} | {row['score']} pts\n"
         content += ""
 
         embed = discord.Embed(color=0x0000ff)
-        embed.title = f"KVK - TOP by TOTAL SCORE"
+        embed.title = f"TOP by TOTAL SCORE"
         embed.add_field(name=f"{start} -> {end}", value=content)
         embed_list.append(embed)
 
