@@ -20,15 +20,53 @@ load_dotenv()
 TOKEN = os.getenv("TOKEN")
 
 REDIS_KEY_GOV_ID = "authorid:govid"
-GOV_KEYS = ["ID", "NAME", "POWER", "KVK GAME KILLS T4", "KVK GAME KILLS T5", "KVK GAME KILLS T4/T5", "KVK GAME DEADS", "KVK WAR KILLS T4", "KVK WAR KILLS T5",
-            "KVK WAR KILLS T4/T5", "KVK WAR DEADS", "EXPECTED KILLS", "EXPECTED DEADS", "HONOR POINTS", "TOTAL SCORE", "KVK RANK"]
+GOV_KEYS = [
+    "ID",
+    "BASE NAME",
+    "BASE POWER",
+    "BASE KILL POINTS",
+    "NAME",
+    "POWER",
+    "KILL POINTS",
+    "KVK KILLS | T4",
+    "KVK KILLS | T5",
+    "KVK KILLS | T4 + T5",
+    "KVK DEADS",
+    "EXPECTED KILLS",
+    "EXPECTED DEADS",
+    "EVE OF THE CRUSADE POINTS",
+    "HONOR POINTS",
+    "TOTAL SCORE",
+    "KVK RANK",
+]
+GOV_KEYS_BASE = [
+    "BASE POWER",
+    "BASE KILL POINTS",
+]
+GOV_KEYS_CURRENT = [
+    "NAME",
+    "POWER",
+    "KILL POINTS",
+    "KVK KILLS | T4",
+    "KVK KILLS | T5",
+    "KVK KILLS | T4 + T5",
+    "KVK DEADS",
+    "EXPECTED KILLS",
+    "EXPECTED DEADS",
+]
+GOV_KEYS_RESULT = [
+    "EVE OF THE CRUSADE POINTS",
+    "HONOR POINTS",
+    "TOTAL SCORE",
+    "KVK RANK", 
+]
 GOAL_KEYS = {
     "kill": "EXPECTED KILLS",
     "dead": "EXPECTED DEADS",
 }
 GOV_GOAL_KEYS = {
-    "kill": "KVK GAME KILLS T4/T5",
-    "dead": "KVK GAME DEADS"
+    "kill": "KVK KILLS | T4 + T5",
+    "dead": "KVK DEADS"
 }
 
 intents = discord.Intents.default()
@@ -37,7 +75,7 @@ intents.message_content = True
 bot = commands.Bot(command_prefix="/", intents=intents, help_command=None)
 
 
-def get_chart_url(t4=0, t5=0, dead=0, progress=0):
+def get_chart_url(progress=0):
     qc = QuickChart()
     qc.width = 500
     qc.height = 300
@@ -102,18 +140,42 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
         else:
             return
 
-    title = f"Registration date: {kvk.get_last_registered_date()} (Month/Date/Year)\n"
-
-    description = ""
-    description += f"> Kvk War Kills and Deads are Official Battle\n"
-    description += f"> Total Score (Kvk Rank) use War Kills/Deads (can be used for MGE for example)\n\n"
-    for k in GOV_KEYS:
+    embed_base = discord.Embed(color=0x06b6d4)
+    embed_base.title = f"{governor.get('ID', '---')} - {governor.get('BASE NAME', '---')}"
+    base_description = ""
+    for k in GOV_KEYS_BASE:
         v = governor.get(k, None)
-        description += f"**{k.lower().title()}**: {v or '---'}\n"
+        base_description += f"**{k.lower().title()}**: {v or '---'}\n"
+    embed_base.description = base_description
+
+    embed_current = discord.Embed(color=0x22c55e)
+    embed_current.title = f"Registration date: {kvk.get_last_registered_date()} (Month/Date/Year)\n"
+    current_description = ""
+    for k in GOV_KEYS_CURRENT:
+        v = governor.get(k, None)
+        current_description += f"**{k.lower().title()}**: {v or '---'}\n"
+    embed_current.description = current_description
 
     embed = discord.Embed(color=0x00ff00)
-    embed.title = title
-    embed.description = description
+
+    try:
+        last_power = int(governor["POWER"].replace(",", ""))
+        base_power = int(governor["BASE POWER"].replace(",", ""))
+        last_kp = int(governor["KILL POINTS"].replace(",", ""))
+        base_kp = int(governor["BASE KILL POINTS"].replace(",", ""))
+        embed.add_field(name="Power Diff", value="💪 {:,}".format(last_power-base_power), inline=True)
+        embed.add_field(name="Kill Points Increase", value="🔥 {:,}".format(last_kp-base_kp))
+        embed.add_field(name="\u200B", value="\u200B")
+
+        embed.add_field(name="Eve Of The Crusade", value=governor.get("EVE OF THE CRUSADE POINTS", "---"), inline=True)
+        embed.add_field(name="Honor Points", value=governor.get("HONOR POINTS", "---"), inline=True)
+        embed.add_field(name="\u200B", value="\u200B")
+
+        embed.add_field(name="Total Score", value=governor.get("TOTAL SCORE", "---"), inline=True)
+        embed.add_field(name="Kvk Rank", value=governor.get("KVK RANK", "---"), inline=True)
+        embed.add_field(name="\u200B", value="\u200B")
+    except Exception as _:
+        pass
 
     gov_goal_set = True
     for _, v in GOAL_KEYS.items():
@@ -125,7 +187,8 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
 
     if gov_goal_set is True:
         gov_progression = None
-
+        kill_met = None
+        dead_met = None
         try:
             gov_goal_kill = int(
                 governor[GOAL_KEYS.get("kill")].replace(",", ""))
@@ -144,7 +207,7 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
             dead_met = gov_dead >= gov_goal_dead
         except Exception as e:
             print(e)
-
+        
         if gov_progression is not None:
             embed.add_field(name="Expected Kills", value=f"{'✅' if kill_met else '🚫'}", inline=True)
             embed.add_field(name="Expected Deads", value=f"{'✅' if dead_met else '🚫'}")
@@ -157,8 +220,12 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
             embed.set_image(url=chart_url)
 
     if interaction:
+        await interaction.response.send_message(embed=embed_base)
+        await interaction.response.send_message(embed=embed_current)
         await interaction.response.send_message(embed=embed)
     elif channel:
+        await channel.send(embed=embed_base)
+        await channel.send(embed=embed_current)
         await channel.send(embed=embed)
 
 
