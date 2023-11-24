@@ -55,8 +55,8 @@ class KvK():
         governor = self.governors.get(gov_id_str, None)
         if governor is None:
             return
-        headers = ["ID", "NAME"] + self.last_fields_headers[1:] + ["KVK RANK"]
-        governor = governor[0:2] + governor[self.last_idx_fields_date+1:]
+        headers = ["ID", "BASE NAME", "BASE POWER", "BASE KILL POINTS"] + self.last_fields_headers[1:] + ["KVK RANK"]
+        governor = governor[0:4] + governor[self.last_idx_fields_date+1:]
         return dict(zip(headers, governor))
 
     def get_top_governors(self, top=300):
