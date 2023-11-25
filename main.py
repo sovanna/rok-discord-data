@@ -140,8 +140,8 @@ async def get_stat_governor_id(
             return
 
     title = f"{governor.get('ID', '---')} - {governor.get('BASE NAME', '---')}"
-    embed_base = discord.Embed(color=0x06B6D4)
-    embed_base.title = title
+    embed = discord.Embed(color=0x06B6D4)
+    embed.title = title
     base_description = ""
     for k in GOV_KEYS_BASE:
         v = governor.get(k, None)
@@ -156,10 +156,10 @@ async def get_stat_governor_id(
     for k in GOV_KEYS_CURRENT:
         v = governor.get(k, None)
         base_description += f"**{k.lower().title()}**: {v or '---'}\n"
-    embed_base.description = base_description
 
-    embed = discord.Embed(color=0x00FF00)
-    embed.title = title
+    base_description += "\n"
+
+    embed.description = base_description
 
     try:
         last_power = int(governor["POWER"].replace(",", ""))
@@ -240,10 +240,8 @@ async def get_stat_governor_id(
             embed.set_image(url=chart_url)
 
     if interaction:
-        await interaction.response.send_message(embed=embed_base)
         await interaction.response.send_message(embed=embed)
     elif channel:
-        await channel.send(embed=embed_base)
         await channel.send(embed=embed)
 
 
