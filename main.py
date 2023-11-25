@@ -11,9 +11,7 @@ from gsheets import KvK
 
 
 store = aioredis.from_url(
-    "redis://0.0.0.0:6379",
-    encoding="utf-8",
-    decode_responses=True
+    "redis://172.17.0.3:6379", encoding="utf-8", decode_responses=True
 )
 
 load_dotenv()
@@ -58,16 +56,13 @@ GOV_KEYS_RESULT = [
     "EVE OF THE CRUSADE POINTS",
     "HONOR POINTS",
     "TOTAL SCORE",
-    "KVK RANK", 
+    "KVK RANK",
 ]
 GOAL_KEYS = {
     "kill": "EXPECTED KILLS",
     "dead": "EXPECTED DEADS",
 }
-GOV_GOAL_KEYS = {
-    "kill": "KVK KILLS | T4 + T5",
-    "dead": "KVK DEADS"
-}
+GOV_GOAL_KEYS = {"kill": "KVK KILLS | T4 + T5", "dead": "KVK DEADS"}
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -79,7 +74,7 @@ def get_chart_url(progress=0):
     qc = QuickChart()
     qc.width = 500
     qc.height = 300
-    qc.version = '2.9.4'
+    qc.version = "2.9.4"
     qc.config = """{
         type: 'gauge',
         data: {
@@ -107,7 +102,9 @@ def get_chart_url(progress=0):
     return qc.get_url()
 
 
-async def get_id_from_store(authorid: str, gov_id: Optional[int] = None) -> Optional[int]:
+async def get_id_from_store(
+    authorid: str, gov_id: Optional[int] = None
+) -> Optional[int]:
     memory_gov_id = None
 
     try:
@@ -128,7 +125,9 @@ async def get_id_from_store(authorid: str, gov_id: Optional[int] = None) -> Opti
     return memory_gov_id
 
 
-async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = None, channel=None):
+async def get_stat_governor_id(
+    gov_id: int, interaction: discord.Interaction = None, channel=None
+):
     kvk = KvK()
     governor = kvk.get_governor_last_data(gov_id)
     if governor is None:
@@ -140,39 +139,59 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
         else:
             return
 
-    embed_base = discord.Embed(color=0x06b6d4)
-    embed_base.title = f"{governor.get('ID', '---')} - {governor.get('BASE NAME', '---')}"
+    title = f"{governor.get('ID', '---')} - {governor.get('BASE NAME', '---')}"
+    embed_base = discord.Embed(color=0x06B6D4)
+    embed_base.title = title
     base_description = ""
     for k in GOV_KEYS_BASE:
         v = governor.get(k, None)
         base_description += f"**{k.lower().title()}**: {v or '---'}\n"
-    embed_base.description = base_description
 
-    embed_current = discord.Embed(color=0x22c55e)
-    embed_current.title = f"Registration date: {kvk.get_last_registered_date()} (Month/Date/Year)\n"
-    current_description = ""
+    base_description += "\n"
+
+    base_description += (
+        f"**Data collect on: {kvk.get_last_registered_date()} (Month/Date/Year)\n**"
+    )
+    base_description += "\n"
     for k in GOV_KEYS_CURRENT:
         v = governor.get(k, None)
-        current_description += f"**{k.lower().title()}**: {v or '---'}\n"
-    embed_current.description = current_description
+        base_description += f"**{k.lower().title()}**: {v or '---'}\n"
+    embed_base.description = base_description
 
-    embed = discord.Embed(color=0x00ff00)
+    embed = discord.Embed(color=0x00FF00)
+    embed.title = title
 
     try:
         last_power = int(governor["POWER"].replace(",", ""))
         base_power = int(governor["BASE POWER"].replace(",", ""))
         last_kp = int(governor["KILL POINTS"].replace(",", ""))
         base_kp = int(governor["BASE KILL POINTS"].replace(",", ""))
-        embed.add_field(name="Power Diff", value="💪 {:,}".format(last_power-base_power), inline=True)
-        embed.add_field(name="Kill Points Increase", value="🔥 {:,}".format(last_kp-base_kp))
+        embed.add_field(
+            name="Power Diff",
+            value="💪 {:,}".format(last_power - base_power),
+            inline=True,
+        )
+        embed.add_field(
+            name="Kill Points Increase", value="🔥 {:,}".format(last_kp - base_kp)
+        )
         embed.add_field(name="\u200B", value="\u200B")
 
-        embed.add_field(name="Eve Of The Crusade", value=governor.get("EVE OF THE CRUSADE POINTS", "---"), inline=True)
-        embed.add_field(name="Honor Points", value=governor.get("HONOR POINTS", "---"), inline=True)
+        embed.add_field(
+            name="Eve Of The Crusade",
+            value=governor.get("EVE OF THE CRUSADE POINTS", "---"),
+            inline=True,
+        )
+        embed.add_field(
+            name="Honor Points", value=governor.get("HONOR POINTS", "---"), inline=True
+        )
         embed.add_field(name="\u200B", value="\u200B")
 
-        embed.add_field(name="Total Score", value=governor.get("TOTAL SCORE", "---"), inline=True)
-        embed.add_field(name="Kvk Rank", value=governor.get("KVK RANK", "---"), inline=True)
+        embed.add_field(
+            name="Total Score", value=governor.get("TOTAL SCORE", "---"), inline=True
+        )
+        embed.add_field(
+            name="Kvk Rank", value=governor.get("KVK RANK", "---"), inline=True
+        )
         embed.add_field(name="\u200B", value="\u200B")
     except Exception as _:
         pass
@@ -190,16 +209,12 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
         kill_met = None
         dead_met = None
         try:
-            gov_goal_kill = int(
-                governor[GOAL_KEYS.get("kill")].replace(",", ""))
-            gov_goal_dead = int(
-                governor[GOAL_KEYS.get("dead")].replace(",", ""))
+            gov_goal_kill = int(governor[GOAL_KEYS.get("kill")].replace(",", ""))
+            gov_goal_dead = int(governor[GOAL_KEYS.get("dead")].replace(",", ""))
             goal_to_reached = gov_goal_kill + gov_goal_dead
 
-            gov_kill = int(
-                governor[GOV_GOAL_KEYS.get("kill")].replace(",", ""))
-            gov_dead = int(
-                governor[GOV_GOAL_KEYS.get("dead")].replace(",", ""))
+            gov_kill = int(governor[GOV_GOAL_KEYS.get("kill")].replace(",", ""))
+            gov_dead = int(governor[GOV_GOAL_KEYS.get("dead")].replace(",", ""))
             gov_reached = gov_kill + gov_dead
 
             gov_progression = round(gov_reached * 100 / goal_to_reached)
@@ -207,25 +222,28 @@ async def get_stat_governor_id(gov_id: int, interaction: discord.Interaction = N
             dead_met = gov_dead >= gov_goal_dead
         except Exception as e:
             print(e)
-        
+
         if gov_progression is not None:
-            embed.add_field(name="Expected Kills", value=f"{'✅' if kill_met else '🚫'}", inline=True)
-            embed.add_field(name="Expected Deads", value=f"{'✅' if dead_met else '🚫'}")
-            
-            embed.add_field(name="Global Kill/Dead Progression",
-                            value=f"{gov_progression}%")
-            chart_url = get_chart_url(
-                progress=gov_progression
+            embed.add_field(
+                name="Expected Kills",
+                value=f"{'✅' if kill_met else '🚫'}",
+                inline=True,
             )
+            embed.add_field(
+                name="Expected Deads", value=f"{'✅' if dead_met else '🚫'}"
+            )
+
+            embed.add_field(
+                name="Global Kill/Dead Progression", value=f"{gov_progression}%"
+            )
+            chart_url = get_chart_url(progress=gov_progression)
             embed.set_image(url=chart_url)
 
     if interaction:
         await interaction.response.send_message(embed=embed_base)
-        await interaction.response.send_message(embed=embed_current)
         await interaction.response.send_message(embed=embed)
     elif channel:
         await channel.send(embed=embed_base)
-        await channel.send(embed=embed_current)
         await channel.send(embed=embed)
 
 
@@ -246,7 +264,9 @@ async def stat(ctx):
         print(e)
 
     if gov_id is None:
-        await interaction.response.send_message("Sorry! you entered a non valid GOVERNOR ID", ephemeral=True)
+        await interaction.response.send_message(
+            "Sorry! you entered a non valid GOVERNOR ID", ephemeral=True
+        )
     else:
         await get_stat_governor_id(gov_id=gov_id, interaction=interaction)
 
@@ -258,20 +278,20 @@ async def top(ctx):
     chunked_list = []
     chunked_size = 20
     for i in range(0, len(ranking), chunked_size):
-        chunked_list.append(ranking[i:i+chunked_size])
+        chunked_list.append(ranking[i : i + chunked_size])
 
     embed_list = []
     for idx, chunked in enumerate(chunked_list):
         l = len(chunked)
-        start = idx*chunked_size+1
-        end = idx*chunked_size+l
+        start = idx * chunked_size + 1
+        end = idx * chunked_size + l
 
         content = ""
         for i, row in enumerate(chunked):
             content += f"#{'0' if (start+i) < 10 else ''}{start+i} | {row['id']} | {row['name']} | {row['score']} pts\n"
         content += ""
 
-        embed = discord.Embed(color=0x0000ff)
+        embed = discord.Embed(color=0x0000FF)
         embed.title = f"TOP by TOTAL SCORE"
         embed.add_field(name=f"{start} -> {end}", value=content)
         embed_list.append(embed)
@@ -287,11 +307,17 @@ async def on_command_error(ctx, error):
     interaction: discord.Integration = ctx.interaction
 
     if isinstance(error, commands.MissingRole):
-        await interaction.response.send_message(content="You don't have appropriate Role", ephemeral=True)
+        await interaction.response.send_message(
+            content="You don't have appropriate Role", ephemeral=True
+        )
     elif isinstance(error, commands.CommandError):
-        await interaction.response.send_message(content=f"Invalid command {str(error)}", ephemeral=True)
+        await interaction.response.send_message(
+            content=f"Invalid command {str(error)}", ephemeral=True
+        )
     else:
-        await interaction.response.send_message(content="An error occurred", ephemeral=True)
+        await interaction.response.send_message(
+            content="An error occurred", ephemeral=True
+        )
 
 
 @bot.event
@@ -337,7 +363,9 @@ async def on_message(message):
         return
 
     if gov_id is None:
-        return await channel.send(content="Governor ID not found in memory. Please try with the full command: `stat 1234` (where 1234 is your Governor ID)")
+        return await channel.send(
+            content="Governor ID not found in memory. Please try with the full command: `stat 1234` (where 1234 is your Governor ID)"
+        )
 
     await get_stat_governor_id(gov_id=gov_id, channel=channel)
 
