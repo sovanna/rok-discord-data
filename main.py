@@ -30,6 +30,8 @@ GOV_KEYS = [
     "KVK KILLS | T5",
     "KVK KILLS | T4 + T5",
     "KVK DEADS",
+    "CUSTOM PLAYER KILLS +",
+    "CUSTOM PLAYER DEAD +",
     "EXPECTED KILLS",
     "EXPECTED DEADS",
     "EVE OF THE CRUSADE POINTS",
@@ -51,6 +53,8 @@ GOV_KEYS_CURRENT = [
     "KVK DEADS",
     "EXPECTED KILLS",
     "EXPECTED DEADS",
+    "CUSTOM PLAYER KILLS +",
+    "CUSTOM PLAYER DEAD +",
 ]
 GOV_KEYS_RESULT = [
     "EVE OF THE CRUSADE POINTS",
@@ -61,6 +65,8 @@ GOV_KEYS_RESULT = [
 GOAL_KEYS = {
     "kill": "EXPECTED KILLS",
     "dead": "EXPECTED DEADS",
+    "custom_kills": "CUSTOM PLAYER KILLS +",
+    "custom_dead": "CUSTOM PLAYER DEAD +",
 }
 GOV_GOAL_KEYS = {"kill": "KVK KILLS | T4 + T5", "dead": "KVK DEADS"}
 
@@ -98,7 +104,10 @@ def get_chart_url(progress=0):
             bottomMarginPercentage: 10,
             },
         },
-        }""" % (progress if progress <= 200 else 200, progress)
+        }""" % (
+        progress if progress <= 200 else 200,
+        progress,
+    )
     return qc.get_url()
 
 
@@ -208,10 +217,19 @@ async def get_stat_governor_id(
         gov_progression = None
         kill_met = None
         dead_met = None
+        custom_kill_met = None
+        custom_dead_met = None
+        custom_kills = 0
+        custom_dead = 0
         try:
             gov_goal_kill = int(governor[GOAL_KEYS.get("kill")].replace(",", ""))
             gov_goal_dead = int(governor[GOAL_KEYS.get("dead")].replace(",", ""))
             goal_to_reached = gov_goal_kill + gov_goal_dead
+
+            custom_kills = governor.get(GOAL_KEYS.get("custom_kills"), None)
+            custom_kills = int(custom_kills.replace(",", "")) if custom_kills else 0
+            custom_dead = governor.get(GOAL_KEYS.get("custom_dead"), None)
+            custom_dead = int(custom_dead.replace(",", "")) if custom_dead else 0
 
             gov_kill = int(governor[GOV_GOAL_KEYS.get("kill")].replace(",", ""))
             gov_dead = int(governor[GOV_GOAL_KEYS.get("dead")].replace(",", ""))
@@ -220,19 +238,48 @@ async def get_stat_governor_id(
             gov_progression = round(gov_reached * 100 / goal_to_reached)
             kill_met = gov_kill >= gov_goal_kill
             dead_met = gov_dead >= gov_goal_dead
+            custom_kill_met = gov_kill >= gov_goal_kill + custom_kills
+            custom_dead_met = gov_dead >= gov_goal_dead + custom_dead
         except Exception as e:
             print(e)
 
         if gov_progression is not None:
             embed.add_field(
-                name="Expected Kills",
+                name="KD Expected Kills",
                 value=f"{'✅' if kill_met else '🚫'}",
                 inline=True,
             )
             embed.add_field(
-                name="Expected Deads", value=f"{'✅' if dead_met else '🚫'}"
+                name="KD Expected Deads", value=f"{'✅' if dead_met else '🚫'}"
             )
+            embed.add_field(name="\u200B", value="\u200B")
+            if custom_kills > 0:
+                embed.add_field(
+                    name="Player Expected Kills",
+                    value=f"{'✅' if custom_kill_met else '🚫'}",
+                    inline=True,
+                )
+            else:
+                embed.add_field(
+                    name="Player Expected Kills",
+                    value="---",
+                    inline=True,
+                )
 
+            if custom_dead > 0:
+                embed.add_field(
+                    name="Player Expected Dead",
+                    value=f"{'✅' if custom_dead_met else '🚫'}",
+                    inline=True,
+                )
+            else:
+                embed.add_field(
+                    name="Player Expected Dead",
+                    value="---",
+                    inline=True,
+                )
+
+            embed.add_field(name="\u200B", value="\u200B")
             embed.add_field(
                 name="Global Kill/Dead Progression", value=f"{gov_progression}%"
             )
