@@ -9,71 +9,92 @@ from redis import RedisError
 from typing import Optional
 from gsheets import KvK
 
-
-store = aioredis.from_url(
-    "redis://172.17.0.3:6379", encoding="utf-8", decode_responses=True
-)
-
 load_dotenv()
-TOKEN = os.getenv("TOKEN")
 
-REDIS_KEY_GOV_ID = "authorid:govid"
-GOV_KEYS = [
-    "ID",
-    "BASE NAME",
-    "BASE POWER",
-    "BASE KILL POINTS",
-    "NAME",
-    "POWER",
-    "KILL POINTS",
-    "KVK KILLS | T4",
-    "KVK KILLS | T5",
-    "KVK KILLS | T4 + T5",
-    "KVK DEADS",
-    "CUSTOM PLAYER KILLS +",
-    "CUSTOM PLAYER DEAD +",
-    "EXPECTED KILLS",
-    "EXPECTED DEADS",
-    "EVE OF THE CRUSADE POINTS",
-    "HONOR POINTS",
-    "TOTAL SCORE",
-    "KVK RANK",
-]
-GOV_KEYS_BASE = [
-    "BASE POWER",
-    "BASE KILL POINTS",
-]
-GOV_KEYS_CURRENT = [
-    "NAME",
-    "POWER",
-    "KILL POINTS",
-    "KVK KILLS | T4",
-    "KVK KILLS | T5",
-    "KVK KILLS | T4 + T5",
-    "KVK DEADS",
-    "EXPECTED KILLS",
-    "EXPECTED DEADS",
-    "CUSTOM PLAYER KILLS +",
-    "CUSTOM PLAYER DEAD +",
-]
-GOV_KEYS_RESULT = [
-    "EVE OF THE CRUSADE POINTS",
-    "HONOR POINTS",
-    "TOTAL SCORE",
-    "KVK RANK",
-]
-GOAL_KEYS = {
-    "kill": "EXPECTED KILLS",
-    "dead": "EXPECTED DEADS",
-    "custom_kills": "CUSTOM PLAYER KILLS +",
-    "custom_dead": "CUSTOM PLAYER DEAD +",
+# Setup Redis - Storage for quick access
+REDIS_HOSTNAME = os.getenv("REDIS_HOSTNAME")
+REDIS_PORT = os.getenv("REDIS_PORT")
+store: aioredis.Redis | None = None
+if REDIS_HOSTNAME and REDIS_PORT:
+    store = aioredis.from_url(
+        f"redis://{REDIS_HOSTNAME}:{REDIS_PORT}",
+        encoding="utf-8",
+        decode_responses=True,
+    )
+
+KINGDOM = os.getenv("KINGDOM")
+STORE_GOV_ID = f"{KINGDOM}:authorid:govid"
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+
+# Values should match the columns' name
+# from Google Sheet document.
+MODEL = {
+    "id": "ID",
+    "base_name": "BASE NAME",
+    "base_power": "BASE POWER",
+    "base_kp": "BASE KILL POINTS",
+    "last_name": "LAST NAME",
+    "last_power": "LAST POWER",
+    "last_kp": "LAST KILL POINTS",
+    "kvk_t4": "KVK KILLS | T4",
+    "kvk_t5": "KVK KILLS | T5",
+    "kvk_t4_t5": "KVK KILLS | T4 + T5",
+    "kvk_deads": "KVK DEADS",
+    "kd_goal_kills": "KD GOAL KILLS",
+    "kd_goal_deads": "KD GOAL DEADS",
+    "pl_goal_kills": "PLAYER GOAL KILLS+",
+    "pl_goal_deads": "PLAYER GOAL DEAD+",
+    "eve": "EVE OF THE CRUSADE POINTS",
+    "hp": "HONOR POINTS",
+    "score": "TOTAL SCORE",
+    "rank": "KVK RANK",
 }
-GOV_GOAL_KEYS = {"kill": "KVK KILLS | T4 + T5", "dead": "KVK DEADS"}
+
+GOV = list(MODEL.values())
+
+UI_GOV_BASE = [
+    MODEL.get("base_power"),
+    MODEL.get("base_kp"),
+]
+UI_GOV_CURRENT_SECTION_1 = [
+    MODEL.get("last_name"),
+    MODEL.get("last_power"),
+    MODEL.get("last_kp"),
+]
+UI_GOV_CURRENT_SECTION_2 = [
+    MODEL.get("kvk_t4"),
+    MODEL.get("kvk_t5"),
+    MODEL.get("kvk_t4_t5"),
+    MODEL.get("kvk_deads"),
+    MODEL.get("kd_goal_kills"),
+    MODEL.get("kd_goal_deads"),
+]
+UI_GOV_RESULT = [
+    MODEL.get("eve"),
+    MODEL.get("hp"),
+    MODEL.get("score"),
+    MODEL.get("rank"),
+]
+
+KD_GOAL = {
+    "kill": MODEL.get("kd_goal_kills"),
+    "dead": MODEL.get("kd_goal_deads"),
+    "player_kills": MODEL.get("pl_goal_kills"),
+    "player_dead": MODEL.get("pl_goal_deads"),
+}
+GOV_TRACK = {
+    "kill": MODEL.get("kvk_t4_t5"),
+    "dead": MODEL.get("kvk_deads"),
+}
 
 intents = discord.Intents.default()
 intents.message_content = True
 
-bot = commands.Bot(command_prefix="/", intents=intents, help_command=None)
+bot = commands.Bot(
+    command_prefix="/",
+    intents=intents,
+    help_command=None,
+)
 
 
 def get_chart_url(progress=0):
@@ -112,32 +133,34 @@ def get_chart_url(progress=0):
 
 
 async def get_id_from_store(
-    authorid: str, gov_id: Optional[int] = None
+    authorid: str,
+    gov_id: Optional[int] = None,
 ) -> Optional[int]:
-    memory_gov_id = None
-
+    if not store:
+        return None
     try:
         async with store.client() as conn:
             if gov_id is not None:
-                await conn.hset(REDIS_KEY_GOV_ID, authorid, gov_id)
+                await conn.hset(STORE_GOV_ID, authorid, gov_id)
                 return gov_id
-            memory_gov_id = await conn.hget(REDIS_KEY_GOV_ID, authorid)
+            memory_gov_id = await conn.hget(STORE_GOV_ID, authorid)
+            if memory_gov_id:
+                memory_gov_id = int(memory_gov_id)
+            return memory_gov_id
     except RedisError as e:
         print(e)
-
-    if memory_gov_id is not None:
-        try:
-            memory_gov_id = int(memory_gov_id)
-        except Exception as e:
-            print(e)
-            memory_gov_id = None
-    return memory_gov_id
+    except Exception as e:
+        print(e)
+    return None
 
 
 async def get_stat_governor_id(
-    gov_id: int, interaction: discord.Interaction = None, channel=None
+    gov_id: int,
+    interaction: Optional[discord.Interaction] = None,
+    channel=None,
 ):
     kvk = KvK()
+
     governor = kvk.get_governor_last_data(gov_id)
     if governor is None:
         content = f"Governor {gov_id} not found in database."
@@ -145,72 +168,77 @@ async def get_stat_governor_id(
             return await interaction.response.send_message(content)
         elif channel:
             return await channel.send(content=content)
-        else:
-            return
+        return
 
-    title = f"{governor.get('ID', '---')} - {governor.get('BASE NAME', '---')}"
     embed = discord.Embed(color=0x06B6D4)
-    embed.title = title
+    embed.title = f"{governor.get(MODEL.get('id'), '---')} - {governor.get(MODEL.get('base_name'), '---')}"
+
     base_description = ""
-    for k in GOV_KEYS_BASE:
+    for k in UI_GOV_BASE:
+        if not k:
+            continue
         v = governor.get(k, None)
         base_description += f"**{k.lower().title()}**: {v or '---'}\n"
-
     base_description += "\n"
-
     base_description += (
         f"**Data collect on: {kvk.get_last_registered_date()} (Month/Date/Year)\n**"
     )
     base_description += "\n"
-    for k in GOV_KEYS_CURRENT:
+    for k in UI_GOV_CURRENT_SECTION_1:
+        if not k:
+            continue
         v = governor.get(k, None)
         base_description += f"**{k.lower().title()}**: {v or '---'}\n"
-
     base_description += "\n"
-
+    for k in UI_GOV_CURRENT_SECTION_2:
+        if not k:
+            continue
+        v = governor.get(k, None)
+        base_description += f"**{k.lower().title()}**: {v or '---'}\n"
+    base_description += "\n"
     embed.description = base_description
 
     try:
-        last_power = int(governor["POWER"].replace(",", ""))
-        base_power = int(governor["BASE POWER"].replace(",", ""))
-        last_kp = int(governor["KILL POINTS"].replace(",", ""))
-        base_kp = int(governor["BASE KILL POINTS"].replace(",", ""))
+        last_power = int(governor.get(MODEL.get("last_power"), "0").replace(",", ""))
+        base_power = int(governor.get(MODEL.get("base_power"), "0").replace(",", ""))
+        last_kp = int(governor.get(MODEL.get("last_kp"), "0").replace(",", ""))
+        base_kp = int(governor.get(MODEL.get("base_kp"), "0").replace(",", ""))
+        power_diff = last_power - base_power
+        power_diff_format = "{:,}".format(power_diff)
+        power_emoji = f"{'🧐' if power_diff > 0 else '💪'}"
         embed.add_field(
             name="Power Diff",
-            value="💪 {:,}".format(last_power - base_power),
+            value=f"{power_emoji} {power_diff_format}",
             inline=True,
         )
         embed.add_field(
-            name="Kill Points Increase", value="🔥 {:,}".format(last_kp - base_kp)
+            name="Kill Points Increase",
+            value="🔥 {:,}".format(last_kp - base_kp),
         )
         embed.add_field(name="\u200B", value="\u200B")
 
         embed.add_field(
-            name="Eve Of The Crusade",
-            value=governor.get("EVE OF THE CRUSADE POINTS", "---"),
+            name="Total Score",
+            value=governor.get(MODEL.get("score"), "N/A"),
             inline=True,
         )
         embed.add_field(
-            name="Honor Points", value=governor.get("HONOR POINTS", "---"), inline=True
+            name="KvK Rank",
+            value=governor.get(MODEL.get("rank"), "N/A"),
+            inline=True,
         )
         embed.add_field(name="\u200B", value="\u200B")
-
-        embed.add_field(
-            name="Total Score", value=governor.get("TOTAL SCORE", "---"), inline=True
-        )
-        embed.add_field(
-            name="Kvk Rank", value=governor.get("KVK RANK", "---"), inline=True
-        )
-        embed.add_field(name="\u200B", value="\u200B")
-    except Exception as _:
-        pass
+    except Exception as e:
+        print(e)
 
     gov_goal_set = True
-    for _, v in GOAL_KEYS.items():
+    for _, v in KD_GOAL.items():
         if v not in governor:
+            print(f"{v} is not in governor")
             gov_goal_set = False
-    for _, v in GOV_GOAL_KEYS.items():
+    for _, v in GOV_TRACK.items():
         if v not in governor:
+            print(f"{v} is not in governor")
             gov_goal_set = False
 
     if gov_goal_set is True:
@@ -222,66 +250,59 @@ async def get_stat_governor_id(
         custom_kills = 0
         custom_dead = 0
         try:
-            gov_goal_kill = int(governor[GOAL_KEYS.get("kill")].replace(",", ""))
-            gov_goal_dead = int(governor[GOAL_KEYS.get("dead")].replace(",", ""))
+            gov_goal_kill = int(governor.get(KD_GOAL.get("kill"), "0").replace(",", ""))
+            gov_goal_dead = int(governor.get(KD_GOAL.get("dead"), "0").replace(",", ""))
             goal_to_reached = gov_goal_kill + gov_goal_dead
 
-            custom_kills = governor.get(GOAL_KEYS.get("custom_kills"), None)
+            custom_kills = governor.get(KD_GOAL.get("player_kills"), None)
             custom_kills = int(custom_kills.replace(",", "")) if custom_kills else 0
-            custom_dead = governor.get(GOAL_KEYS.get("custom_dead"), None)
+            custom_dead = governor.get(KD_GOAL.get("player_dead"), None)
             custom_dead = int(custom_dead.replace(",", "")) if custom_dead else 0
 
-            gov_kill = int(governor[GOV_GOAL_KEYS.get("kill")].replace(",", ""))
-            gov_dead = int(governor[GOV_GOAL_KEYS.get("dead")].replace(",", ""))
+            gov_kill = int(governor.get(GOV_TRACK.get("kill"), "0").replace(",", ""))
+            gov_dead = int(governor.get(GOV_TRACK.get("dead"), "0").replace(",", ""))
             gov_reached = gov_kill + gov_dead
 
-            gov_progression = round(gov_reached * 100 / goal_to_reached)
+            if goal_to_reached > 0:
+                gov_progression = round(gov_reached * 100 / goal_to_reached)
+
             kill_met = gov_kill >= gov_goal_kill
             dead_met = gov_dead >= gov_goal_dead
-            custom_kill_met = gov_kill >= gov_goal_kill + custom_kills
-            custom_dead_met = gov_dead >= gov_goal_dead + custom_dead
+            custom_kill_met = gov_kill >= custom_kills
+            custom_dead_met = gov_dead >= custom_dead
         except Exception as e:
             print(e)
 
         if gov_progression is not None:
-            embed.add_field(
-                name="KD Expected Kills",
-                value=f"{'✅' if kill_met else '🚫'}",
-                inline=True,
-            )
-            embed.add_field(
-                name="KD Expected Deads", value=f"{'✅' if dead_met else '🚫'}"
-            )
-            embed.add_field(name="\u200B", value="\u200B")
             if custom_kills > 0:
                 embed.add_field(
-                    name="Player Expected Kills",
+                    name="Player Goal Kills",
                     value=f"{'✅' if custom_kill_met else '🚫'}",
                     inline=True,
                 )
             else:
                 embed.add_field(
-                    name="Player Expected Kills",
-                    value="---",
+                    name="KD Goal Kills",
+                    value=f"{'✅' if kill_met else '🚫'}",
                     inline=True,
                 )
 
             if custom_dead > 0:
                 embed.add_field(
-                    name="Player Expected Dead",
+                    name="Player Goal Dead",
                     value=f"{'✅' if custom_dead_met else '🚫'}",
                     inline=True,
                 )
             else:
                 embed.add_field(
-                    name="Player Expected Dead",
-                    value="---",
-                    inline=True,
+                    name="KD Goal Deads",
+                    value=f"{'✅' if dead_met else '🚫'}",
                 )
 
             embed.add_field(name="\u200B", value="\u200B")
             embed.add_field(
-                name="Global Kill/Dead Progression", value=f"{gov_progression}%"
+                name="Global Kill/Dead Progression",
+                value=f"{gov_progression}%",
             )
             chart_url = get_chart_url(progress=gov_progression)
             embed.set_image(url=chart_url)
@@ -367,12 +388,15 @@ async def on_command_error(ctx, error):
 
 @bot.event
 async def on_ready():
-    try:
-        async with store.client() as conn:
-            pong = await conn.ping()
-            print(f"Redis ping: {'pong' if pong else '---'}")
-    except RedisError as e:
-        print(e)
+    if store:
+        try:
+            async with store.client() as conn:
+                pong = await conn.ping()
+                print(f"Redis ping: {'pong' if pong else '---'}")
+        except RedisError as e:
+            print(e)
+    else:
+        print("Redis is missing")
 
 
 @bot.event
@@ -396,7 +420,7 @@ async def on_message(message):
             return
         try:
             gov_id = int(gov_id)
-        except Exception as e:
+        except Exception as _:
             return await channel.send(content="Governor ID is not valid.")
         gov_id = await get_id_from_store(authorid=author_id, gov_id=gov_id)
     elif cmd_length == 1:
@@ -415,8 +439,11 @@ async def on_message(message):
     await get_stat_governor_id(gov_id=gov_id, channel=channel)
 
 
-async def main():
-    await bot.start(TOKEN, reconnect=True)
+async def main(token: str):
+    await bot.start(token, reconnect=True)
 
 
-asyncio.run(main())
+if DISCORD_TOKEN:
+    asyncio.run(main(DISCORD_TOKEN))
+else:
+    print("DISCORD_TOKEN is missing in environment variables.")
