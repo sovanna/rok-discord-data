@@ -2,14 +2,13 @@ name: Build Rok-Discord-Data 🎉
 
 on:
   push:
-    branches: [ production ]
+    branches: [production]
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-
   build-bot:
     runs-on: ubuntu-latest
 
@@ -37,13 +36,16 @@ jobs:
       - name: Create .env file
         run: |
           touch .env
-          echo APPLICATION_ID=${{ secrets.DISCORD_APP_ID }} >> .env
-          echo PUBLIC_KEY=${{ secrets.DISCORD_PUBLIC_KEY }} >> .env
-          echo TOKEN=${{ secrets.DISCORD_TOKEN }} >> .env
-          echo GUILD_ID=${{ secrets.DISCORD_GUILD_ID }} >> .env
+          echo DISCORD_APPLICATION_ID=${{ secrets.DISCORD_APP_ID }} >> .env
+          echo DISCORD_PUBLIC_KEY=${{ secrets.DISCORD_PUBLIC_KEY }} >> .env
+          echo DISCORD_TOKEN=${{ secrets.DISCORD_TOKEN }} >> .env
+          echo DISCORD_GUILD_ID=${{ secrets.DISCORD_GUILD_ID }} >> .env
           echo GOOGLE_SHEETS_API_KEY=${{ secrets.GOOGLE_SHEETS_API_KEY }} >> .env
           echo GOOGLE_SPREADSHEET_ID=${{ secrets.GOOGLE_SPREADSHEET_ID }} >> .env
           echo GOOGLE_SPREADSHEET_RANGE=base >> .env
+          echo REDIS_HOSTNAME="0.0.0.0" >> .env
+          echo REDIS_PORT=6379 >> .env
+          echo KINGDOM="xxx" >> .env
 
       - name: Build Docker image
         uses: docker/build-push-action@v2
@@ -52,4 +54,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
